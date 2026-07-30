@@ -1,0 +1,15 @@
+name: PistonEventProbe
+version: '1.0.0'
+main: com.enthusia.pistoneventprobe.PistonEventProbePlugin
+api-version: '1.21.11'
+author: Enthusia
+description: Temporary diagnostic probe for BlockPistonExtendEvent and Polar piston leniency filters.
+commands:
+  pistonprobe:
+    description: Controls the piston event diagnostic probe.
+    usage: /pistonprobe <start [count]|continuous|stop|status|listeners>
+    permission: pistonprobe.admin
+permissions:
+  pistonprobe.admin:
+    description: Allows use of the piston event diagnostic probe.
+    default: op

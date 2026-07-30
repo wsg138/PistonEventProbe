@@ -1,0 +1,10 @@
+I made a diagnostic listener that captures BlockPistonExtendEvent at LOWEST and MONITOR priority. It also lists every registered listener for the event and logs, for each online player, the exact world-name comparison, distance from the piston, distance from the moved blocks, and whether the two conditions you described pass.
+
+I will send the relevant latest.log section after reproducing it. The main fields will be:
+- called=true/false
+- cancelled at LOWEST and MONITOR
+- whether Polar is registered as a listener
+- worldNameEquals
+- within16OfPiston
+- within16OfMovedBlock
+- describedPolarFilterPass
