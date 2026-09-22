@@ -4,8 +4,9 @@ The runnable Gradle project lives in `PistonEventProbe/`. Handwritten tests live
 
 ## Automated coverage
 
-`PistonEventProbeCommandTest` loads the real plugin in MockBukkit and protects the command/state-machine behavior:
+`PistonEventProbeCommandTest` loads and enables the real `PistonEventProbePlugin` class in MockBukkit and protects the command/state-machine behavior:
 
+- command permission metadata;
 - permission denial for non-admin senders;
 - stopped status by default;
 - default `start` count of 10;
@@ -15,7 +16,7 @@ The runnable Gradle project lives in `PistonEventProbe/`. Handwritten tests live
 - stop/reset behavior;
 - unknown-subcommand usage behavior.
 
-This is intentionally behavioral coverage rather than a source-text assertion: the plugin is enabled, its real command is registered from `plugin.yml`, and the command is dispatched through a mocked Bukkit server.
+This is behavioral coverage rather than a source-text assertion: the real plugin class is enabled and its real command executor is exercised through a mocked Bukkit server. MockBukkit currently rejects the production descriptor's patch-level `api-version: 1.21.11`, so the test uses an equivalent in-memory descriptor with `api-version: 1.21`, the same command name, and the same permission. The production `plugin.yml` is not changed or weakened; descriptor compatibility with real Paper remains a runtime/build boundary.
 
 ## Run locally
 
@@ -49,6 +50,7 @@ HTML results are written to `PistonEventProbe/build/reports/tests/test/`; machin
 
 MockBukkit is appropriate for the command state machine, but this plugin exists specifically to observe real piston-event behavior. The following remain real-Paper/manual boundaries:
 
+- production `plugin.yml` acceptance, including the patch-level Paper API version;
 - actual `BlockPistonExtendEvent` ordering at LOWEST and MONITOR;
 - cancellation behavior from other installed plugins;
 - the exact set/order of registered piston listeners on the production stack;
