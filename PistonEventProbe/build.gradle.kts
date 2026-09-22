@@ -32,5 +32,6 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.test {
+    dependsOn(tasks.jar)
     useJUnitPlatform()
 }
