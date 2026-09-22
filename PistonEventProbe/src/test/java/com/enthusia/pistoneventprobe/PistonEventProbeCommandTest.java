@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,31 +16,16 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 
 final class PistonEventProbeCommandTest {
-    private static final String TEST_PLUGIN_YML = """
-            name: PistonEventProbe
-            version: '1.0.0-test'
-            main: com.enthusia.pistoneventprobe.PistonEventProbePlugin
-            api-version: '1.21'
-            commands:
-              pistonprobe:
-                description: Controls the piston event diagnostic probe.
-                usage: /pistonprobe <start [count]|continuous|stop|status|listeners>
-                permission: pistonprobe.admin
-            permissions:
-              pistonprobe.admin:
-                description: Allows use of the piston event diagnostic probe.
-                default: op
-            """;
+    private static final Path PLUGIN_JAR = Path.of("build", "libs", "PistonEventProbe-1.0.0.jar");
 
     private ServerMock server;
-    private PistonEventProbePlugin plugin;
+    private Plugin plugin;
 
     @BeforeEach
     void setUp() {
         server = MockBukkit.mock();
-        plugin = MockBukkit.loadWith(
-                PistonEventProbePlugin.class,
-                new ByteArrayInputStream(TEST_PLUGIN_YML.getBytes(StandardCharsets.UTF_8)));
+        plugin = MockBukkit.loadJar(PLUGIN_JAR.toFile());
+        server.getPluginManager().enablePlugin(plugin);
     }
 
     @AfterEach
@@ -48,18 +35,18 @@ final class PistonEventProbeCommandTest {
 
     @Test
     void commandMetadataRetainsAdminPermission() {
-        PluginCommand command = plugin.getCommand("pistonprobe");
+        PluginCommand command = server.getPluginCommand("pistonprobe");
         assertNotNull(command);
         assertEquals("pistonprobe.admin", command.getPermission());
     }
 
     @Test
-    void nonAdminCannotChangeOrInspectProbe() {
+    void nonAdminCannotChangeOrInspectProbe() throws ReflectiveOperationException {
         var player = server.addPlayer();
-        PluginCommand command = plugin.getCommand("pistonprobe");
+        PluginCommand command = server.getPluginCommand("pistonprobe");
         assertNotNull(command);
 
-        assertTrue(plugin.onCommand(player, command, "pistonprobe", new String[] {"status"}));
+        assertTrue(invokeCommand(player, command, "status"));
         assertEquals("You do not have permission to use this command.", player.nextMessage());
     }
 
@@ -132,6 +119,17 @@ final class PistonEventProbeCommandTest {
         assertEquals("Usage: /pistonprobe <start [count]|continuous|stop|status|listeners>", player.nextMessage());
         server.dispatchCommand(player, "pistonprobe status");
         assertEquals("Piston probe status: stopped.", player.nextMessage());
+    }
+
+    private boolean invokeCommand(CommandSender sender, Command command, String... args)
+            throws ReflectiveOperationException {
+        var method = plugin.getClass().getMethod(
+                "onCommand",
+                CommandSender.class,
+                Command.class,
+                String.class,
+                String[].class);
+        return (boolean) method.invoke(plugin, sender, command, "pistonprobe", args);
     }
 
     private org.mockbukkit.mockbukkit.entity.PlayerMock admin() {
