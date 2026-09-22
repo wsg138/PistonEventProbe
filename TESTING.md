@@ -4,9 +4,9 @@ The runnable Gradle project lives in `PistonEventProbe/`. Handwritten tests live
 
 ## Automated coverage
 
-`PistonEventProbeCommandTest` loads and enables the real `PistonEventProbePlugin` class in MockBukkit and protects the command/state-machine behavior:
+`PistonEventProbeCommandTest` builds the real plugin JAR first, loads that packaged JAR through MockBukkit, enables it, and protects the command/state-machine behavior:
 
-- command permission metadata;
+- command permission metadata from the packaged `plugin.yml`;
 - permission denial for non-admin senders;
 - stopped status by default;
 - default `start` count of 10;
@@ -16,7 +16,7 @@ The runnable Gradle project lives in `PistonEventProbe/`. Handwritten tests live
 - stop/reset behavior;
 - unknown-subcommand usage behavior.
 
-This is behavioral coverage rather than a source-text assertion: the real plugin class is enabled and its real command executor is exercised through a mocked Bukkit server. MockBukkit currently rejects the production descriptor's patch-level `api-version: 1.21.11`, so the test uses an equivalent in-memory descriptor with `api-version: 1.21`, the same command name, and the same permission. The production `plugin.yml` is not changed or weakened; descriptor compatibility with real Paper remains a runtime/build boundary.
+This is behavioral coverage rather than a source-text assertion. JAR loading is intentional: MockBukkit's class-based loader creates a ByteBuddy subclass of the plugin class, while `PistonEventProbePlugin` is `final`. The JAR loader uses MockBukkit's URL plugin classloader instead, so the production class and packaged descriptor can be exercised without changing production modifiers or metadata just for testing.
 
 ## Run locally
 
@@ -40,17 +40,16 @@ Run only the command suite with:
 ./gradlew test --tests com.enthusia.pistoneventprobe.PistonEventProbeCommandTest
 ```
 
-HTML results are written to `PistonEventProbe/build/reports/tests/test/`; machine-readable XML is under `PistonEventProbe/build/test-results/test/`.
+The `test` task depends on `jar`, so `build/libs/PistonEventProbe-1.0.0.jar` exists before the MockBukkit suite starts. HTML results are written to `PistonEventProbe/build/reports/tests/test/`; machine-readable XML is under `PistonEventProbe/build/test-results/test/`.
 
 ## CI
 
-`.github/workflows/test-hardening.yml` checks out the exact pull-request head, uses Java 21, runs `clean test build`, and uploads the test reports even on failure. A green run proves the automated MockBukkit suite and build passed on that exact PR head.
+`.github/workflows/test-hardening.yml` checks out the exact pull-request head, uses Java 21, runs `clean test build`, and uploads the test reports even on failure. A green run proves the packaged plugin JAR loaded and enabled under MockBukkit and that the automated command suite and build passed on that exact PR head.
 
 ## What these tests do not prove
 
 MockBukkit is appropriate for the command state machine, but this plugin exists specifically to observe real piston-event behavior. The following remain real-Paper/manual boundaries:
 
-- production `plugin.yml` acceptance, including the patch-level Paper API version;
 - actual `BlockPistonExtendEvent` ordering at LOWEST and MONITOR;
 - cancellation behavior from other installed plugins;
 - the exact set/order of registered piston listeners on the production stack;
