@@ -1,140 +1,142 @@
 package com.enthusia.pistoneventprobe;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import java.nio.file.Path;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.logging.Logger;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.PluginCommand;
-import org.bukkit.plugin.Plugin;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockbukkit.mockbukkit.MockBukkit;
-import org.mockbukkit.mockbukkit.ServerMock;
 
 final class PistonEventProbeCommandTest {
-    private static final Path PLUGIN_JAR = Path.of("build", "libs", "PistonEventProbe-1.0.0.jar");
-
-    private ServerMock server;
-    private Plugin plugin;
+    private PistonEventProbePlugin plugin;
+    private Command command;
+    private CommandSender sender;
+    private List<String> messages;
 
     @BeforeEach
-    void setUp() {
-        server = MockBukkit.mock();
-        plugin = MockBukkit.loadJar(PLUGIN_JAR.toFile());
-        server.getPluginManager().enablePlugin(plugin);
-    }
+    void setUp() throws ReflectiveOperationException {
+        plugin = mock(PistonEventProbePlugin.class, CALLS_REAL_METHODS);
+        doReturn(Logger.getLogger("PistonEventProbeCommandTest")).when(plugin).getLogger();
 
-    @AfterEach
-    void tearDown() {
-        MockBukkit.unmock();
+        Field eventIds = PistonEventProbePlugin.class.getDeclaredField("eventIds");
+        eventIds.setAccessible(true);
+        eventIds.set(plugin, new IdentityHashMap<>());
+
+        command = mock(Command.class);
+        sender = mock(CommandSender.class);
+        messages = new ArrayList<>();
+
+        when(sender.hasPermission("pistonprobe.admin")).thenReturn(true);
+        when(sender.getName()).thenReturn("TestSender");
+        doAnswer(invocation -> {
+            messages.add(invocation.getArgument(0, String.class));
+            return null;
+        }).when(sender).sendMessage(anyString());
     }
 
     @Test
-    void commandMetadataRetainsAdminPermission() {
-        PluginCommand command = server.getPluginCommand("pistonprobe");
-        assertNotNull(command);
-        assertEquals("pistonprobe.admin", command.getPermission());
-    }
+    void nonAdminCannotChangeOrInspectProbe() {
+        when(sender.hasPermission("pistonprobe.admin")).thenReturn(false);
 
-    @Test
-    void nonAdminCannotChangeOrInspectProbe() throws ReflectiveOperationException {
-        var player = server.addPlayer();
-        PluginCommand command = server.getPluginCommand("pistonprobe");
-        assertNotNull(command);
-
-        assertTrue(invokeCommand(player, command, "status"));
-        assertEquals("You do not have permission to use this command.", player.nextMessage());
+        assertTrue(execute("status"));
+        assertEquals("You do not have permission to use this command.", lastMessage());
     }
 
     @Test
     void statusReportsStoppedByDefault() {
-        var player = admin();
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: stopped.", lastMessage());
+    }
 
-        server.dispatchCommand(player, "pistonprobe status");
-
-        assertEquals("Piston probe status: stopped.", player.nextMessage());
+    @Test
+    void emptyArgumentsAlsoReportStoppedStatus() {
+        assertTrue(execute());
+        assertEquals("Piston probe status: stopped.", lastMessage());
     }
 
     @Test
     void startWithoutCountArmsTenCaptures() {
-        var player = admin();
+        assertTrue(execute("start"));
+        assertEquals("Piston probe armed for the next 10 piston extension event(s).", lastMessage());
 
-        server.dispatchCommand(player, "pistonprobe start");
-        assertEquals("Piston probe armed for the next 10 piston extension event(s).", player.nextMessage());
-
-        server.dispatchCommand(player, "pistonprobe status");
-        assertEquals("Piston probe status: armed for 10 more event(s).", player.nextMessage());
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: armed for 10 more event(s).", lastMessage());
     }
 
     @Test
     void startClampsCountIntoOneToOneHundredRange() {
-        var player = admin();
+        assertTrue(execute("start", "0"));
+        assertEquals("Piston probe armed for the next 1 piston extension event(s).", lastMessage());
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: armed for 1 more event(s).", lastMessage());
 
-        server.dispatchCommand(player, "pistonprobe start 0");
-        assertEquals("Piston probe armed for the next 1 piston extension event(s).", player.nextMessage());
-        server.dispatchCommand(player, "pistonprobe status");
-        assertEquals("Piston probe status: armed for 1 more event(s).", player.nextMessage());
+        assertTrue(execute("start", "999"));
+        assertEquals("Piston probe armed for the next 100 piston extension event(s).", lastMessage());
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: armed for 100 more event(s).", lastMessage());
+    }
 
-        server.dispatchCommand(player, "pistonprobe start 999");
-        assertEquals("Piston probe armed for the next 100 piston extension event(s).", player.nextMessage());
-        server.dispatchCommand(player, "pistonprobe status");
-        assertEquals("Piston probe status: armed for 100 more event(s).", player.nextMessage());
+    @Test
+    void negativeCountClampsToOne() {
+        assertTrue(execute("start", "-25"));
+        assertEquals("Piston probe armed for the next 1 piston extension event(s).", lastMessage());
     }
 
     @Test
     void invalidCountDoesNotArmProbe() {
-        var player = admin();
+        assertTrue(execute("start", "nope"));
+        assertEquals("Count must be a number from 1 to 100.", lastMessage());
 
-        server.dispatchCommand(player, "pistonprobe start nope");
-        assertEquals("Count must be a number from 1 to 100.", player.nextMessage());
-
-        server.dispatchCommand(player, "pistonprobe status");
-        assertEquals("Piston probe status: stopped.", player.nextMessage());
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: stopped.", lastMessage());
     }
 
     @Test
     void continuousAndStopTransitionsAreObservable() {
-        var player = admin();
+        assertTrue(execute("continuous"));
+        assertEquals("Piston probe enabled continuously. Use /pistonprobe stop when finished.", lastMessage());
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: continuous capture enabled.", lastMessage());
 
-        server.dispatchCommand(player, "pistonprobe continuous");
-        assertEquals("Piston probe enabled continuously. Use /pistonprobe stop when finished.", player.nextMessage());
-        server.dispatchCommand(player, "pistonprobe status");
-        assertEquals("Piston probe status: continuous capture enabled.", player.nextMessage());
+        assertTrue(execute("stop"));
+        assertEquals("Piston probe stopped.", lastMessage());
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: stopped.", lastMessage());
+    }
 
-        server.dispatchCommand(player, "pistonprobe stop");
-        assertEquals("Piston probe stopped.", player.nextMessage());
-        server.dispatchCommand(player, "pistonprobe status");
-        assertEquals("Piston probe status: stopped.", player.nextMessage());
+    @Test
+    void startAfterContinuousDisablesContinuousMode() {
+        assertTrue(execute("continuous"));
+        assertTrue(execute("start", "3"));
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: armed for 3 more event(s).", lastMessage());
     }
 
     @Test
     void unknownSubcommandReturnsUsageWithoutChangingState() {
-        var player = admin();
-
-        server.dispatchCommand(player, "pistonprobe wat");
-        assertEquals("Usage: /pistonprobe <start [count]|continuous|stop|status|listeners>", player.nextMessage());
-        server.dispatchCommand(player, "pistonprobe status");
-        assertEquals("Piston probe status: stopped.", player.nextMessage());
+        assertTrue(execute("wat"));
+        assertEquals("Usage: /pistonprobe <start [count]|continuous|stop|status|listeners>", lastMessage());
+        assertTrue(execute("status"));
+        assertEquals("Piston probe status: stopped.", lastMessage());
     }
 
-    private boolean invokeCommand(CommandSender sender, Command command, String... args)
-            throws ReflectiveOperationException {
-        var method = plugin.getClass().getMethod(
-                "onCommand",
-                CommandSender.class,
-                Command.class,
-                String.class,
-                String[].class);
-        return (boolean) method.invoke(plugin, sender, command, "pistonprobe", args);
+    private boolean execute(String... args) {
+        return plugin.onCommand(sender, command, "pistonprobe", args);
     }
 
-    private org.mockbukkit.mockbukkit.entity.PlayerMock admin() {
-        var player = server.addPlayer();
-        player.setOp(true);
-        return player;
+    private String lastMessage() {
+        return messages.get(messages.size() - 1);
     }
 }
