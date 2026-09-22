@@ -20,7 +20,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.110.0")
+    testImplementation("org.mockito:mockito-core:5.20.0")
 }
 
 java {
@@ -32,6 +32,5 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.test {
-    dependsOn(tasks.jar)
     useJUnitPlatform()
 }
