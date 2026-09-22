@@ -1,8 +1,12 @@
 package com.enthusia.pistoneventprobe;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import org.bukkit.command.PluginCommand;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,13 +14,31 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 
 final class PistonEventProbeCommandTest {
+    private static final String TEST_PLUGIN_YML = """
+            name: PistonEventProbe
+            version: '1.0.0-test'
+            main: com.enthusia.pistoneventprobe.PistonEventProbePlugin
+            api-version: '1.21'
+            commands:
+              pistonprobe:
+                description: Controls the piston event diagnostic probe.
+                usage: /pistonprobe <start [count]|continuous|stop|status|listeners>
+                permission: pistonprobe.admin
+            permissions:
+              pistonprobe.admin:
+                description: Allows use of the piston event diagnostic probe.
+                default: op
+            """;
+
     private ServerMock server;
     private PistonEventProbePlugin plugin;
 
     @BeforeEach
     void setUp() {
         server = MockBukkit.mock();
-        plugin = MockBukkit.load(PistonEventProbePlugin.class);
+        plugin = MockBukkit.loadWith(
+                PistonEventProbePlugin.class,
+                new ByteArrayInputStream(TEST_PLUGIN_YML.getBytes(StandardCharsets.UTF_8)));
     }
 
     @AfterEach
@@ -25,10 +47,19 @@ final class PistonEventProbeCommandTest {
     }
 
     @Test
+    void commandMetadataRetainsAdminPermission() {
+        PluginCommand command = plugin.getCommand("pistonprobe");
+        assertNotNull(command);
+        assertEquals("pistonprobe.admin", command.getPermission());
+    }
+
+    @Test
     void nonAdminCannotChangeOrInspectProbe() {
         var player = server.addPlayer();
+        PluginCommand command = plugin.getCommand("pistonprobe");
+        assertNotNull(command);
 
-        assertTrue(server.dispatchCommand(player, "pistonprobe status"));
+        assertTrue(plugin.onCommand(player, command, "pistonprobe", new String[] {"status"}));
         assertEquals("You do not have permission to use this command.", player.nextMessage());
     }
 
