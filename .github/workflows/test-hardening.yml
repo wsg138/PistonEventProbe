@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+  pull_request:
+    paths:
+      - "PistonEventProbe/src/**"
+      - "PistonEventProbe/build.gradle.kts"
+      - "PistonEventProbe/settings.gradle.kts"
+      - "PistonEventProbe/gradle/**"
+      - "PistonEventProbe/gradlew"
+      - ".github/workflows/test-hardening.yml"
+      - "TESTING.md"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: PistonEventProbe
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: PistonEventProbe/**/*.gradle.kts
+
+      - name: Run tests and build
+        run: |
+          chmod +x gradlew
+          ./gradlew clean test build --no-daemon
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: piston-event-probe-test-results-${{ github.event.pull_request.head.sha }}
+          path: |
+            PistonEventProbe/build/reports/tests/test/
+            PistonEventProbe/build/test-results/test/
+          if-no-files-found: warn
+          retention-days: 7
